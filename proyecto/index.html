@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Square Crush</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f8ff;
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        h1 {
+            color: #ff6b6b;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+            font-size: 1.5rem;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            gap: 3px;
+            background-color: #333;
+            padding: 8px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            aspect-ratio: 1/1;
+            max-width: 100vw;
+            max-height: 100vw;
+            touch-action: none;
+        }
+
+        .cell {
+            width: 100%;
+            height: 100%;
+            border-radius: 6px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        .cell.selected {
+            transform: scale(0.92);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
+        }
+
+        .cell.dragging {
+            opacity: 0.7;
+            z-index: 10;
+        }
+
+        .score-panel {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            background-color: #fff;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
+            font-size: 0.9rem;
+        }
+
+        .score,
+        .moves {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .controls {
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        button {
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            width: 100%;
+        }
+
+        button:hover,
+        button:active {
+            background-color: #ff5252;
+        }
+
+        /* Colores para los dulces */
+        .candy-1 {
+            background-color: #ff5252;
+        } /* Rojo */
+        .candy-2 {
+            background-color: #ffd740;
+        } /* Amarillo */
+        .candy-3 {
+            background-color: #69f0ae;
+        } /* Verde */
+        .candy-4 {
+            background-color: #40c4ff;
+        } /* Azul */
+        .candy-5 {
+            background-color: #e040fb;
+        } /* Morado */
+        .candy-6 {
+            background-color: #ff8a80;
+        } /* Rosa */
+
+        @media (min-width: 500px) {
+            .cell {
+                font-size: 1.5rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .score-panel {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Candy Crush Clone con Arrastre</h1>
+
+    <div class="game-container">
+        <div class="score-panel">
+            <div class="score">Puntuación: <span id="score">0</span></div>
+            <div class="moves">Movimientos: <span id="moves">0</span></div>
+        </div>
+
+        <div class="game-board" id="board"></div>
+
+        <div class="controls">
+            <button id="reset-btn">Reiniciar Juego</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const board = document.getElementById('board');
+            const scoreDisplay = document.getElementById('score');
+            const movesDisplay = document.getElementById('moves');
+            const resetBtn = document.getElementById('reset-btn');
+
+            const ROWS = 8;
+            const COLS = 8;
+            const CANDY_TYPES = 6;
+            const SWIPE_THRESHOLD = 20; // Mínimo de pixels para considerar un arrastre
+
+            let grid = [];
+            let score = 0;
+            let moves = 0;
+            let selectedCell = null;
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let isDragging = false;
+            let draggedCell = null;
+
+            // Inicializar el juego
+            function initGame() {
+                score = 0;
+                moves = 0;
+                selectedCell = null;
+                scoreDisplay.textContent = score;
+                movesDisplay.textContent = moves;
+
+                createBoard();
+                while (checkMatches()) {
+                    removeMatches();
+                    fillBoard();
+                }
+            }
+
+            // Crear el tablero
+            function createBoard() {
+                board.innerHTML = '';
+                grid = [];
+
+                for (let row = 0; row < ROWS; row++) {
+                    grid[row] = [];
+                    for (let col = 0; col < COLS; col++) {
+                        const cell = document.createElement('div');
+                        cell.classList.add('cell');
+                        cell.dataset.row = row;
+                        cell.dataset.col = col;
+
+                        // Asignar un tipo de dulce aleatorio (1-6)
+                        const candyType = Math.floor(Math.random() * CANDY_TYPES) + 1;
+                        grid[row][col] = candyType;
+                        cell.classList.add(`candy-${candyType}`);
+
+                        // Eventos para arrastre
+                        cell.addEventListener('mousedown', (e) => handleDragStart(e, row, col));
+                        cell.addEventListener('touchstart', (e) => handleDragStart(e, row, col), {
+                            passive: false,
+                        });
+
+                        board.appendChild(cell);
+                    }
+                }
+
+                // Eventos globales para el arrastre
+                document.addEventListener('mousemove', handleDragMove);
+                document.addEventListener('mouseup', handleDragEnd);
+                document.addEventListener('touchmove', handleDragMove, { passive: false });
+                document.addEventListener('touchend', handleDragEnd);
+            }
+
+            // Manejar inicio de arrastre
+            function handleDragStart(e, row, col) {
+                e.preventDefault();
+
+                if (e.type === 'touchstart') {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                } else {
+                    touchStartX = e.clientX;
+                    touchStartY = e.clientY;
+                }
+
+                selectedCell = { row, col };
+                draggedCell = getCellElement(row, col);
+                draggedCell.classList.add('selected');
+                isDragging = true;
+            }
+
+            // Manejar movimiento durante arrastre
+            function handleDragMove(e) {
+                if (!isDragging || !selectedCell) return;
+                e.preventDefault();
+
+                let clientX, clientY;
+                if (e.type === 'touchmove') {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                }
+
+                const diffX = clientX - touchStartX;
+                const diffY = clientY - touchStartY;
+
+                // Determinar dirección predominante del arrastre
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    // Arrastre horizontal
+                    if (Math.abs(diffX) > SWIPE_THRESHOLD) {
+                        const direction = diffX > 0 ? 1 : -1;
+                        const targetCol = selectedCell.col + direction;
+
+                        if (targetCol >= 0 && targetCol < COLS) {
+                            swapAndCheck(selectedCell.row, selectedCell.col, selectedCell.row, targetCol);
+                        }
+                        resetDrag();
+                    }
+                } else {
+                    // Arrastre vertical
+                    if (Math.abs(diffY) > SWIPE_THRESHOLD) {
+                        const direction = diffY > 0 ? 1 : -1;
+                        const targetRow = selectedCell.row + direction;
+
+                        if (targetRow >= 0 && targetRow < ROWS) {
+                            swapAndCheck(selectedCell.row, selectedCell.col, targetRow, selectedCell.col);
+                        }
+                        resetDrag();
+                    }
+                }
+            }
+
+            // Manejar fin del arrastre
+            function handleDragEnd(e) {
+                if (draggedCell) draggedCell.classList.remove('selected');
+                resetDrag();
+            }
+
+            function resetDrag() {
+                selectedCell = null;
+                draggedCell = null;
+                isDragging = false;
+            }
+
+            // Obtener elemento DOM de la celda
+            function getCellElement(row, col) {
+                return board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+            }
+
+            // Intercambiar dulces y verificar match
+            function swapAndCheck(r1, c1, r2, c2) {
+                swapCandies(r1, c1, r2, c2);
+
+                const matches = checkMatches();
+                if (matches.length > 0) {
+                    moves++;
+                    movesDisplay.textContent = moves;
+
+                    // Aumentar puntuación solo si movimientos > 0
+                    if (moves > 0) {
+                        score += matches.length * 10; // 10 puntos por cada dulce eliminado
+                        scoreDisplay.textContent = score;
+                    }
+
+                    removeMatches(matches);
+                    fillBoard();
+                    // Después de llenar el tablero, seguir chequeando mientras haya matches
+                    while (checkMatches().length > 0) {
+                        const moreMatches = checkMatches();
+                        score += moreMatches.length * 10;
+                        scoreDisplay.textContent = score;
+                        removeMatches(moreMatches);
+                        fillBoard();
+                    }
+                } else {
+                    // No hay match, revertir cambio
+                    swapCandies(r1, c1, r2, c2);
+                }
+            }
+
+            // Intercambiar dulces en la matriz y en el DOM
+            function swapCandies(r1, c1, r2, c2) {
+                // Cambiar en la matriz
+                let temp = grid[r1][c1];
+                grid[r1][c1] = grid[r2][c2];
+                grid[r2][c2] = temp;
+
+                // Actualizar clases en el DOM
+                const cell1 = getCellElement(r1, c1);
+                const cell2 = getCellElement(r2, c2);
+
+                cell1.classList.remove(`candy-${grid[r2][c2]}`);
+                cell2.classList.remove(`candy-${grid[r1][c1]}`);
+
+                cell1.classList.add(`candy-${grid[r1][c1]}`);
+                cell2.classList.add(`candy-${grid[r2][c2]}`);
+            }
+
+            // Buscar matches horizontales y verticales
+            // Devuelve un array con las celdas a eliminar: [{row, col}]
+            function checkMatches() {
+                const matches = [];
+
+                // Revisar filas
+                for (let row = 0; row < ROWS; row++) {
+                    let count = 1;
+                    for (let col = 1; col < COLS; col++) {
+                        if (grid[row][col] === grid[row][col - 1] && grid[row][col] !== 0) {
+                            count++;
+                        } else {
+                            if (count >= 3) {
+                                for (let k = 0; k < count; k++) {
+                                    matches.push({ row: row, col: col - 1 - k });
+                                }
+                            }
+                            count = 1;
+                        }
+                    }
+                    // Revisar al final de fila
+                    if (count >= 3) {
+                        for (let k = 0; k < count; k++) {
+                            matches.push({ row: row, col: COLS - 1 - k });
+                        }
+                    }
+                }
+
+                // Revisar columnas
+                for (let col = 0; col < COLS; col++) {
+                    let count = 1;
+                    for (let row = 1; row < ROWS; row++) {
+                        if (grid[row][col] === grid[row - 1][col] && grid[row][col] !== 0) {
+                            count++;
+                        } else {
+                            if (count >= 3) {
+                                for (let k = 0; k < count; k++) {
+                                    matches.push({ row: row - 1 - k, col: col });
+                                }
+                            }
+                            count = 1;
+                        }
+                    }
+                    // Revisar al final de columna
+                    if (count >= 3) {
+                        for (let k = 0; k < count; k++) {
+                            matches.push({ row: ROWS - 1 - k, col: col });
+                        }
+                    }
+                }
+
+                // Eliminar duplicados
+                const uniqueMatches = [];
+                const seen = new Set();
+                for (const cell of matches) {
+                    const key = `${cell.row},${cell.col}`;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        uniqueMatches.push(cell);
+                    }
+                }
+
+                return uniqueMatches;
+            }
+
+            // Eliminar dulces coincidentes (poner 0 y actualizar DOM)
+            function removeMatches(matches) {
+                for (const cell of matches) {
+                    grid[cell.row][cell.col] = 0;
+                    const cellElement = getCellElement(cell.row, cell.col);
+                    cellElement.className = 'cell'; // Quitar todas las clases de dulce
+                }
+            }
+
+            // Llenar espacios vacíos con nuevos dulces cayendo
+            function fillBoard() {
+                for (let col = 0; col < COLS; col++) {
+                    let emptySpots = 0;
+                    for (let row = ROWS - 1; row >= 0; row--) {
+                        if (grid[row][col] === 0) {
+                            emptySpots++;
+                        } else if (emptySpots > 0) {
+                            // Mover dulce hacia abajo
+                            grid[row + emptySpots][col] = grid[row][col];
+                            grid[row][col] = 0;
+                        }
+                    }
+                    // Agregar nuevos dulces arriba
+                    for (let i = 0; i < emptySpots; i++) {
+                        grid[i][col] = Math.floor(Math.random() * CANDY_TYPES) + 1;
+                    }
+                }
+
+                // Actualizar DOM con la nueva matriz
+                for (let row = 0; row < ROWS; row++) {
+                    for (let col = 0; col < COLS; col++) {
+                        const cell = getCellElement(row, col);
+                        cell.className = 'cell';
+                        if (grid[row][col] !== 0) {
+                            cell.classList.add(`candy-${grid[row][col]}`);
+                        }
+                    }
+                }
+            }
+
+            resetBtn.addEventListener('click', () => {
+                initGame();
+            });
+
+            // Iniciar juego
+            initGame();
+        });
+    </script>
+</body>
+</html>

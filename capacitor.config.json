@@ -1,0 +1,24 @@
+{
+  "appId": "com.squarecrush.app",
+  "appName": "squarecrush",
+  "webDir": "dist",
+  "assets": {
+    "icon": {
+      "source": "assets/icon-only.png"
+    },
+    "splash": {
+      "source": "assets/splash.png",
+      "backgroundColor": "#ffffff"
+    }
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 3000,
+      "launchAutoHide": true,
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "FIT_CENTER",
+      "showSpinner": false,
+      "backgroundColor": "#ffffffff"
+    }
+  }
+}
